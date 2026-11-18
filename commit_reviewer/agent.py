@@ -31,6 +31,8 @@ Areas: {areas}.
 Before reporting a rule violation, check it: use search_repo to find the rule or the missing counterpart, and
 read_file for nearby code. Tool calls are limited, so search for exact names rather than browsing. Quote the evidence. Don't report style preferences, possible
 future problems, or things the diff doesn't show.
+Don't claim that a tool, library, or platform behaves a certain way (YAML quoting, GitHub Actions contexts,
+framework APIs) unless the repo itself shows it. A wrong claim costs the author more than a missed one.
 
 Repo rules for the areas this commit touches:
 {guidance}

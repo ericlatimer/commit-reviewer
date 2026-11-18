@@ -17,12 +17,14 @@ from .triage import gitleaks_findings, triage
 
 
 def _client():
-    from azure.identity.aio import DefaultAzureCredential
+    from azure.identity.aio import AzureCliCredential
     from agent_framework.openai import OpenAIChatClient
 
     # The account's OpenAI endpoint, not the Foundry project endpoint: the project endpoint refuses the
     # inference-only role (Cognitive Services OpenAI User) and wants Foundry User, which can also list keys.
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=True)
+    # Azure CLI sign-in only: azure/login in CI, `az login` locally. DefaultAzureCredential would also probe
+    # managed identity, which needs aiohttp and can answer on GitHub's runners (they are Azure VMs).
+    credential = AzureCliCredential(process_timeout=30)
     return OpenAIChatClient(
         model=os.environ.get("FOUNDRY_MODEL", "reviewer"),
         base_url=os.environ["FOUNDRY_OPENAI_ENDPOINT"].rstrip("/") + "/openai/v1/",
@@ -39,9 +41,16 @@ async def review(args) -> int:
         shas = args.commit
     client, credential = (None, None) if args.no_agent else _client()
     reports: list[CommitReport] = []
+    failed = 0
     try:
         for sha in shas:
-            reports.append(await review_one(args, rules, sha, client))
+            try:
+                reports.append(await review_one(args, rules, sha, client))
+            except Exception as e:  # one bad commit shouldn't lose the others' reviews
+                failed += 1
+                print(f"review failed for {sha[:12]}: {type(e).__name__}: {e}", file=sys.stderr)
+                reports.append(CommitReport(sha=sha, subject="(review failed)", findings=[], reviewed_by_agent=False,
+                                            triage_reason=f"error: {type(e).__name__}: {str(e)[:200]}"))
     finally:
         if credential:
             await credential.close()
@@ -54,8 +63,9 @@ async def review(args) -> int:
         (Path(args.evidence_dir) / "evidence.json").write_text(
             evidence_record(reports, rules.repo, os.environ.get("FOUNDRY_MODEL", "reviewer")))
     if args.post:
-        post(args.post, reports, repo_url, os.environ.get("REVIEWER_MENTION", ""))
-    return 0
+        post(args.post, [r for r in reports if not r.triage_reason.startswith("error:")], repo_url,
+             os.environ.get("REVIEWER_MENTION", ""))
+    return 1 if failed else 0
 
 
 async def review_one(args, rules, sha, client) -> CommitReport:
