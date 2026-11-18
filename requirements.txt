@@ -1,0 +1,6 @@
+agent-framework-core==1.26.0
+agent-framework-openai==1.18.2
+azure-identity==1.27.0
+openai==3.53.0
+pydantic==2.14.3
+PyYAML==6.0.3

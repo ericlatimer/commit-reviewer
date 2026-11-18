@@ -1,0 +1,69 @@
+# Copy to <repo>/.github/workflows/commit-review.yml and set the branch below.
+# Needs repo variables (Settings → Secrets and variables → Actions → Variables; none are secret):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, FOUNDRY_OPENAI_ENDPOINT, FOUNDRY_MODEL
+# and a rules file at .reviewer/rules.yaml.
+name: commit review
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read     # read the code
+  issues: write      # post findings
+  id-token: write    # GitHub OIDC token → Entra (no stored Azure secret)
+
+concurrency:
+  group: commit-review-${{ github.ref }}
+  cancel-in-progress: false   # every push gets reviewed, one at a time
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need history for before..after
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ericlatimer/commit-reviewer
+          ref: main        # pin to a commit SHA once stable
+          path: .commit-reviewer
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: .commit-reviewer/requirements.txt
+
+      - run: pip install -r .commit-reviewer/requirements.txt
+
+      - name: Install gitleaks (pinned, checksum verified)
+        run: .commit-reviewer/deploy/install_gitleaks.sh "$RUNNER_TEMP/bin" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Review pushed commits
+        env:
+          PYTHONPATH: .commit-reviewer
+          GITHUB_TOKEN: ${{ github.token }}
+          FOUNDRY_OPENAI_ENDPOINT: ${{ vars.FOUNDRY_OPENAI_ENDPOINT }}
+          FOUNDRY_MODEL: ${{ vars.FOUNDRY_MODEL }}
+          REVIEWER_MENTION: ${{ github.repository_owner }}
+        run: >
+          python -m commit_reviewer review --repo . --rules .reviewer/rules.yaml
+          --range "${{ github.event.before }}..${{ github.sha }}"
+          --post "${{ github.repository }}" --evidence-dir evidence
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: review-evidence-${{ github.sha }}
+          path: evidence/
+          retention-days: 90
