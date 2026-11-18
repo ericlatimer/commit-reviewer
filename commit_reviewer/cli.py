@@ -42,10 +42,21 @@ async def review(args) -> int:
     client, credential = (None, None) if args.no_agent else _client()
     reports: list[CommitReport] = []
     failed = 0
+    capped = False
     try:
         for sha in shas:
             try:
-                reports.append(await review_one(args, rules, sha, client))
+                try:
+                    reports.append(await review_one(args, rules, sha, None if capped else client, capped))
+                except Exception as e:
+                    if not _is_cost_cap(e):
+                        raise
+                    # Foundry's cost controls refused the call. That's the cap doing its job, not a failure:
+                    # finish this commit and the rest with checks only, and warn instead of turning the run red.
+                    capped = True
+                    print(f"::warning::Foundry cost cap reached at {sha[:12]}; model review skipped from here on. "
+                          f"{str(e)[:200]}", file=sys.stderr)
+                    reports.append(await review_one(args, rules, sha, None, capped))
             except Exception as e:  # one bad commit shouldn't lose the others' reviews
                 failed += 1
                 print(f"review failed for {sha[:12]}: {type(e).__name__}: {e}", file=sys.stderr)
@@ -68,7 +79,16 @@ async def review(args) -> int:
     return 1 if failed else 0
 
 
-async def review_one(args, rules, sha, client) -> CommitReport:
+def _is_cost_cap(e: BaseException | None) -> bool:
+    """Foundry cost controls (daily tokens or monthly $) answer 429 "Budget exceeded for cost control."."""
+    while e is not None:
+        if "budget exceeded" in str(e).lower():
+            return True
+        e = e.__cause__
+    return False
+
+
+async def review_one(args, rules, sha, client, capped: bool = False) -> CommitReport:
     from .agent import build_instructions, build_prompt, review_commit
 
     commit = load_commit(args.repo, sha)
@@ -87,6 +107,8 @@ async def review_one(args, rules, sha, client) -> CommitReport:
         r.findings = t.findings + result.findings
         r.summary, r.guardrail_block = result.summary, result.blocked_by_guardrail
         r.input_tokens, r.output_tokens = result.input_tokens, result.output_tokens
+    elif t.needs_agent and capped:
+        r.triage_reason += " · model skipped: cost cap reached"
     r.findings = cap_and_sort(r.findings, rules.max_low_findings)
     return r
 
