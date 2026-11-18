@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from .gitdiff import commits_in_range, load_commit
-from .report import CommitReport, cap_and_sort, comment_md, evidence_record, high_issue, sha256
+from .report import CommitReport, cap_and_sort, comment_md, evidence_record, finding_md, high_issue, sha256
 from .rules import load_rules
 from .triage import gitleaks_findings, triage
 
@@ -68,7 +68,9 @@ async def review(args) -> int:
 
     repo_url = f"https://github.com/{args.post}" if args.post else ""
     for r in reports:
-        print(comment_md(r, repo_url), end="\n\n---\n\n")
+        # The comment only counts high findings (each gets its own issue); the log shows them in full.
+        print("\n\n".join([comment_md(r, repo_url)] + [finding_md(f, repo_url, r.sha) for f in r.high]),
+              end="\n\n---\n\n")
     if args.evidence_dir:
         Path(args.evidence_dir).mkdir(parents=True, exist_ok=True)
         (Path(args.evidence_dir) / "evidence.json").write_text(

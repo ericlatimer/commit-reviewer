@@ -33,7 +33,7 @@ on the deployment and **GitHub OIDC → Entra ID** sign-in (no stored keys anywh
 - Foundry (AI Services) account with **key auth disabled**, a project, and a `gpt-5-mini` deployment (westus3).
 - Guardrail policy `reviewer-guardrails`: Prompt Shields (jailbreak + indirect attack) blocking; content harms at
   High so ordinary code ("kill the process") isn't blocked.
-- **Cost controls that block requests**, not just alert: $5/month and 1M tokens/day.
+- **Cost controls that block requests**, not just alert: $5/month and 3M tokens/day.
 - Entra app with federated credentials for exactly two repo+branch pairs; no client secret exists.
 - Role: *Cognitive Services OpenAI User* on the account (inference only: no keys, no management). The Foundry
   project endpoint would need *Foundry User*, which can list keys, so the reviewer calls the account endpoint.

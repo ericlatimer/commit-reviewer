@@ -125,7 +125,7 @@ so they don't bury the rest.
 
 ## Cost and limits
 - Small model (`gpt-5-mini`), `max_tokens` capped per run, at most 4 calls per tool.
-- **Foundry cost controls block requests** (not just alert): $5/month and 1M tokens/day, enforced by the
+- **Foundry cost controls block requests** (not just alert): $5/month and 3M tokens/day, enforced by the
   platform rather than by my code. Plus the $10/month subscription budget alert.
 - GitHub Actions minutes: about 400 runs a month at 1–2 minutes each, inside the free private-repo
   allowance.

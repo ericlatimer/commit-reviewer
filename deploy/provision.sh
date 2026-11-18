@@ -23,7 +23,7 @@ MODEL_VERSION="${MODEL_VERSION:-2025-08-07}"
 CAPACITY="${CAPACITY:-50}"               # thousand tokens per minute
 RAI_POLICY="${RAI_POLICY:-reviewer-guardrails}"
 MONTHLY_USD="${MONTHLY_USD:-5}"
-DAILY_TOKENS="${DAILY_TOKENS:-1000000}"
+DAILY_TOKENS="${DAILY_TOKENS:-3000000}"
 APP_NAME="${APP_NAME:-commit-reviewer-github}"
 # GitHub repo:branch pairs allowed to sign in as the reviewer.
 GITHUB_SUBJECTS=(
